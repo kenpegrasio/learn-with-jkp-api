@@ -6,12 +6,11 @@ import userRouter from "./routes/userRoutes.js";
 import cors from "cors";
 import materialRouter from "./routes/materialRoutes.js";
 
+dotenv.config();
+
 const app = express();
 app.use(express.json());
-
 app.use(cors());
-
-dotenv.config();
 
 connectDB();
 
@@ -23,7 +22,4 @@ app.use("/api/subject", subjectRouter);
 app.use("/api/user", userRouter);
 app.use("/api/material", materialRouter);
 
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log("Listening on PORT " + PORT);
-});
+export default app;
