@@ -1,75 +1,88 @@
 import { Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import User from "../models/User";
 
-export const createUser = async (req: Request, res: Response): Promise<void> => {
+const JWT_SECRET = process.env.JWT_SECRET || "i_love_you";
+
+export const register = async (req: Request, res: Response): Promise<void> => {
   try {
+    const { name, username, email, password } = req.body;
+
+    if (!/^(?=.*[A-Z])(?=.*[!@#$%^&*])(?=.{8,})/.test(password)) {
+      res.status(400).json({
+        message:
+          "Password must be at least 8 characters long, contain at least one capital letter and one special character.",
+      });
+      return;
+    }
+
+    if (!/^[\w-]+(\.[\w-]+)*@([\w-]+\.)+[a-zA-Z]{2,7}$/.test(email)) {
+      res.status(400).json({ message: "Invalid email format." });
+      return;
+    }
+
     const user = new User({
-      ...req.body,
-      point: req.body.point || 0,
+      name,
+      username,
+      email,
       accesstype: req.body.accesstype || "User",
+      point: req.body.point || 0,
+      password,
     });
     await user.save();
-    res.status(201).json(user);
-  } catch (error) {
-    if (error instanceof Error) {
-      res.status(500).json({ message: error.message });
+    res.status(201).json({ message: "User registered successfully" });
+  } catch (error: any) {
+    if (error.code === 11000) {
+      res.status(400).json({ message: "Username or email already exists." });
     } else {
-      res.status(500).json({ message: "An unknown error occured" });
+      res
+        .status(400)
+        .json({ message: "Registration failed", error: error.message });
     }
   }
 };
 
-export const findUser = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req: Request, res: Response): Promise<void> => {
   try {
+    const { emailOrUsername, password } = req.body;
+
     const user = await User.findOne({
-      google_id: req.params.id,
+      $or: [{ email: emailOrUsername }, { username: emailOrUsername }],
     });
-    if (!user) {
-      res.status(200).json({});
-    } else {
-      res.status(200).json(user);
+
+    if (!user || !(await user.comparePassword(password))) {
+      res.status(401).json({ message: "Invalid credentials" });
+      return;
     }
-  } catch (error) {
-    if (error instanceof Error) {
-      res.status(500).json({ message: error.message });
-    } else {
-      res.status(500).json({ message: "An unknown error occured" });
-    }
+
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
+      expiresIn: "1y",
+    });
+
+    res.json({ token });
+  } catch (error: any) {
+    res.status(400).json({ message: "Login failed", error: error.message });
   }
 };
 
-export const getUsers = async (req: Request, res: Response): Promise<void> => {
-  try {
-    const users = await User.find();
-    if (!users) {
-      res.status(404).json({ message: "No users found" });
-    } else {
-      res.status(200).json(users);
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      res.status(500).json({ message: error.message });
-    } else {
-      res.status(500).json({ message: "An unknown error occured" });
-    }
+export const getUserInfo = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const token = req.header("Authorization")?.replace("Bearer", "").trim();
+  if (!token) {
+    res.status(401).json({ message: "No token, authorization denied" });
+    return;
   }
-};
-
-export const deleteUser = async (req: Request, res: Response): Promise<void> => {
   try {
-    const user = await User.findOneAndDelete({
-      google_id: req.params.id,
-    });
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const user = await User.findById(decoded.userId).select("-password");
     if (!user) {
       res.status(404).json({ message: "User not found" });
-    } else {
-      res.status(200).json({ message: "User deleted successfully" });
+      return;
     }
-  } catch (error) {
-    if (error instanceof Error) {
-      res.status(500).json({ message: error.message });
-    } else {
-      res.status(500).json({ message: "An unknown error occured" });
-    }
+    res.status(200).json(user);
+  } catch (error: any) {
+    res.status(400).json({ message: "Token is not valid." });
   }
 };
