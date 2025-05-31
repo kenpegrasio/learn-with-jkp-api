@@ -1,5 +1,6 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Schema, Document, Types } from "mongoose";
 import bcrypt from "bcrypt";
+import "./Chapter";
 
 export interface IUser extends Document {
   name: string;
@@ -9,6 +10,8 @@ export interface IUser extends Document {
   point: number;
   password: string;
   comparePassword(candidatePassword: string): Promise<boolean>;
+  completed_chapters: Types.ObjectId[];
+  favourite_chapters: Types.ObjectId[];
 }
 
 const UserSchema: Schema = new Schema({
@@ -39,6 +42,18 @@ const UserSchema: Schema = new Schema({
         `Password must be at least 8 characters long, contain at least one capital letter and one special character.`,
     },
   },
+  completed_chapters: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chapter",
+    },
+  ],
+  favourite_chapters: [
+    {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Chapter",
+    },
+  ],
 });
 
 UserSchema.pre<IUser>("save", async function (next) {

@@ -25,9 +25,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       name,
       username,
       email,
-      accesstype: req.body.accesstype || "User",
-      point: req.body.point || 0,
+      accesstype: "User",
+      point: 0,
       password,
+      completed_chapters: [],
+      favourite_chapters: [],
     });
     await user.save();
     res.status(201).json({ message: "User registered successfully" });
@@ -56,7 +58,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, {
-      expiresIn: "1y",
+      expiresIn: "1h",
     });
 
     res.json({ token });
@@ -82,6 +84,61 @@ export const getUserInfo = async (
       return;
     }
     res.status(200).json(user);
+  } catch (error: any) {
+    res.status(400).json({ message: "Token is not valid." });
+  }
+};
+
+export const userMarkComplete = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const token = req.header("Authorization")?.replace("Bearer", "").trim();
+  if (!token) {
+    res.status(401).json({ message: "No token, authorization denied" });
+    return;
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const updated = await User.findByIdAndUpdate(
+      decoded.userId,
+      {
+        $push: { completed_chapters: req.body.chapter_id },
+        $inc: { point: 10 },
+      },
+      { new: true }
+    );
+    if (!updated) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    res.status(201).json(updated);
+  } catch (error: any) {
+    res.status(400).json({ message: "Token is not valid." });
+  }
+};
+
+export const userFavourite = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  const token = req.header("Authorization")?.replace("Bearer", "").trim();
+  if (!token) {
+    res.status(401).json({ message: "No token, authorization denied" });
+    return;
+  }
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
+    const updated = await User.findByIdAndUpdate(
+      decoded.userId,
+      { $push: { favourite_chapters: req.body.chapter_id } },
+      { new: true }
+    );
+    if (!updated) {
+      res.status(404).json({ message: "User not found" });
+      return;
+    }
+    res.status(201).json(updated);
   } catch (error: any) {
     res.status(400).json({ message: "Token is not valid." });
   }
